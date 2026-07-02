@@ -13,7 +13,7 @@
 #define ENABLE_DATABASE
 #include <FirebaseClient.h>
 
-// --- Pin Configuration (Req 6) ---
+// --- Pin Configuration ---
 const int FLOW_PIN = 27;
 const int PRESSURE_PIN = 39;
 const int LED_BLUE = 33;
@@ -26,7 +26,7 @@ const unsigned long LED_TIMEOUT_MS = 5000;
 const unsigned long WIFI_TIMEOUT_MS = 10000;
 const float FLOW_PULSES_PER_LITER = 7.5; // Calibration constant (YF-S201C)
 
-// Macro Fallbacks (Ensure these are passed via platformio.ini)
+// Macro Fallbacks
 #ifndef FLOW_RATE_THRESHOLD
 #define FLOW_RATE_THRESHOLD 1.0f
 #endif
@@ -191,27 +191,31 @@ void handleSensors() {
       pressureAvailable = true;
     }
 
-    // Evaluate against criteria (Req 3.7)
-    bool passed = (flowLpm >= (float)FLOW_RATE_THRESHOLD);
-    if (pressureAvailable) {
-      passed = passed && (pressure >= (float)PRESSURE_THRESHOLD);
+    // --- IDLE CHECK ---
+    // Only evaluate and publish if sensors detect actual activity (> 0)
+    // Note: If ADC noise causes false triggers, change 0.0 to a small deadband (e.g., 0.5)
+    if (flowLpm > 150.0 || (pressureAvailable && pressure > 0.0)) {
+      bool passed = (flowLpm >= (float)FLOW_RATE_THRESHOLD);
+      if (pressureAvailable) {
+        passed = passed && (pressure >= (float)PRESSURE_THRESHOLD);
+      }
+
+      Serial.printf("Activity Detected -> Flow: %.2f L/min | Pressure: %.2f | Status: %s\n", 
+                     flowLpm, pressure, passed ? "PASS" : "FAIL");
+
+      // Update LED Timers cleanly
+      if (passed) {
+        digitalWrite(LED_GREEN, HIGH);
+        digitalWrite(LED_RED, LOW);
+        greenLedOffAt = millis() + LED_TIMEOUT_MS;
+      } else {
+        digitalWrite(LED_RED, HIGH);
+        digitalWrite(LED_GREEN, LOW);
+        redLedOffAt = millis() + LED_TIMEOUT_MS;
+      }
+
+      publishToFirebase(pressure, flowLpm, passed);
     }
-
-    Serial.printf("Eval -> Flow: %.2f L/min | Pressure: %.2f | Status: %s\n", 
-                   flowLpm, pressure, passed ? "PASS" : "FAIL");
-
-    // Update LED Timers cleanly
-    if (passed) {
-      digitalWrite(LED_GREEN, HIGH);
-      digitalWrite(LED_RED, LOW);
-      greenLedOffAt = millis() + LED_TIMEOUT_MS;
-    } else {
-      digitalWrite(LED_RED, HIGH);
-      digitalWrite(LED_GREEN, LOW);
-      redLedOffAt = millis() + LED_TIMEOUT_MS;
-    }
-
-    publishToFirebase(pressure, flowLpm, passed);
   }
 }
 
@@ -284,7 +288,7 @@ void setup() {
 }
 
 void loop() {
-  // CRITICAL: Process Firebase async tasks
+  // Process Firebase async tasks
   if (currentState == RUNNING) {
     app.loop();
   }

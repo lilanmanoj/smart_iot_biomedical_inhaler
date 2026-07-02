@@ -86,7 +86,7 @@ pio run -e esp32-devkit-v1 -t upload
 Monitor serial output:
 
 ```bash
-pio device monitor -e esp32-devkit-v1
+pio device monitor -e esp32-devkit-v1 -b 115200
 ```
 
 ## Notes

@@ -39,6 +39,14 @@ This firmware supports:
 - Firebase Realtime Database project and API credentials
 - PlatformIO CLI or IDE
 
+## Pin Mapping
+
+- `FLOW_PIN`: GPIO27 (flow sensor pulse input)
+- `PRESSURE_PIN`: GPIO39 (pressure sensor ADC input)
+- `LED_BLUE`: GPIO33 (status LED blink/steady)
+- `LED_GREEN`: GPIO25 (pass indicator)
+- `LED_RED`: GPIO32 (fail indicator)
+
 ## Setup
 
 1. Copy `.env.example` to `.env`:

@@ -43,9 +43,9 @@ This firmware supports:
 
 - `FLOW_PIN`: GPIO27 (flow sensor pulse input)
 - `PRESSURE_PIN`: GPIO39 (pressure sensor ADC input)
-- `LED_BLUE`: GPIO33 (status LED blink/steady)
-- `LED_GREEN`: GPIO25 (pass indicator)
-- `LED_RED`: GPIO32 (fail indicator)
+- `LED_BLUE`: GPIO33 (Power/status LED blink/steady)
+- `LED_GREEN`: GPIO25 (valid inhale indicator)
+- `LED_RED`: GPIO32 (invalid inhale indicator)
 
 ## Setup
 
@@ -80,13 +80,13 @@ export $(grep -v '^#' .env | xargs)
 Upload the firmware to the ESP32:
 
 ```bash
-pio run -e esp32dev -t upload
+pio run -e esp32-devkit-v1 -t upload
 ```
 
 Monitor serial output:
 
 ```bash
-pio device monitor -e esp32dev
+pio device monitor -e esp32-devkit-v1
 ```
 
 ## Notes

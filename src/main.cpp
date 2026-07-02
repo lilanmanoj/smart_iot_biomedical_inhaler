@@ -22,11 +22,13 @@
 */
 
 #include <Arduino.h>
-#include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <WebServer.h>
 #include <Preferences.h>
-#include <Firebase_ESP_Client.h>
 #include <ArduinoJson.h>
+
+#define ENABLE_DATABASE
+#include <FirebaseClient.h>
 
 // --- Pin configuration (edit if you want other pins) ---------------------
 const int FLOW_PIN = 27;      // Must be interrupt-capable
@@ -40,21 +42,26 @@ WebServer server(80);
 Preferences prefs;
 bool apMode = false;
 
-// --- Firebase objects (placeholders) ------------------------------------
-FirebaseData fbdo;
-FirebaseAuth auth;
-FirebaseConfig fbconfig;
+// --- Firebase Init ------------------------------------
+FirebaseApp app;
+RealtimeDatabase Database;
+WiFiClientSecure sslClient;
+using AsyncClient = AsyncClientClass;
+AsyncClient asyncClient(sslClient);
 
 // Firebase configuration: values come from build flags when available
 const char *FIREBASE_DATABASE_URL_STR = FIREBASE_DATABASE_URL;
 const char *FIREBASE_API_KEY_STR = FIREBASE_API_KEY;
 
+// If the database is public, NoAuth can be used. Otherwise, replace with UserAuth.
+NoAuth noAuth;
+
 // Thresholds: provided via build flags (platformio.ini) or fallback values
 #ifndef FLOW_RATE_THRESHOLD
-#define FLOW_RATE_THRESHOLD 1.0
+#define FLOW_RATE_THRESHOLD 1.0f
 #endif
 #ifndef PRESSURE_THRESHOLD
-#define PRESSURE_THRESHOLD 1.0
+#define PRESSURE_THRESHOLD 1.0f
 #endif
 
 // Pressure sensor enable flag: can be set via build flags (platformio.ini)
@@ -137,24 +144,28 @@ bool tryConnectStoredWiFi(const String &ssid, const String &pass, unsigned long 
   return (WiFi.status() == WL_CONNECTED);
 }
 
-// Initialize Firebase
+// Initialize FirebaseClient with Realtime Database
 void initFirebase() {
-  fbconfig.api_key = FIREBASE_API_KEY_STR;
-  fbconfig.database_url = FIREBASE_DATABASE_URL_STR;
-  Firebase.begin(&fbconfig, &auth);
+  sslClient.setInsecure();
+  sslClient.setHandshakeTimeout(5);
+
+  initializeApp(asyncClient, app, getAuth(noAuth), 10000);
+  app.getApp<RealtimeDatabase>(Database);
+  Database.url(FIREBASE_DATABASE_URL_STR);
 }
 
 // Publish JSON with pressure, flow and passed flag
 void publishSensorData(float pressure, float flow, bool passed) {
-  FirebaseJson json;
-  json.set("pressure", pressure);
-  json.set("flow", flow);
-  json.set("passed", passed);
+  String payload = "{";
+  payload += "\"pressure\":" + String(pressure, 2) + ",";
+  payload += "\"flow\":" + String(flow, 2) + ",";
+  payload += "\"passed\":" + String(passed ? "true" : "false");
+  payload += "}";
   String path = "/devices/device1/data";
-  if (Firebase.RTDB.setJSON(&fbdo, path.c_str(), &json)) {
+  if (Database.set<object_t>(asyncClient, path, object_t(payload))) {
     Serial.println("Uploaded sensor data to Firebase");
   } else {
-    Serial.printf("Firebase error: %s\n", fbdo.errorReason().c_str());
+    Serial.printf("Firebase error: %s\n", asyncClient.lastError().message().c_str());
   }
 }
 
@@ -168,10 +179,10 @@ void setup() {
   pinMode(LED_RED, OUTPUT);
   pinMode(FLOW_PIN, INPUT_PULLUP);
 
-#if PRESSURE_SENSOR_ENABLED
-  // Pressure sensor is enabled; ensure ADC pin is usable.
-  analogReadResolution(12);
-#endif
+  if (PRESSURE_SENSOR_ENABLED == 1) {
+    // Pressure sensor is enabled; ensure ADC pin is usable.
+    analogReadResolution(12);
+  }
 
   // Attach flow sensor interrupt
   attachInterrupt(digitalPinToInterrupt(FLOW_PIN), flow_isr, RISING);
@@ -276,12 +287,12 @@ void loop() {
     float pressure = 0;
     bool pressureAvailable = false;
 
-#if PRESSURE_SENSOR_ENABLED
-    // Pressure read (placeholder): convert ADC to scaled pressure
-    int raw = analogRead(PRESSURE_PIN);
-    pressure = ((float)raw / 4095.0) * 25.0; // placeholder: map to 0-25 units
-    pressureAvailable = true;
-#endif
+    if (PRESSURE_SENSOR_ENABLED == 1) {
+      // Pressure read (placeholder): convert ADC to scaled pressure
+      int raw = analogRead(PRESSURE_PIN);
+      pressure = ((float)raw / 4095.0) * 25.0; // placeholder: map to 0-25 units
+      pressureAvailable = true;
+    }
 
     if (pressureAvailable) {
       Serial.printf("Flow: %.2f L/min  Pulses:%lu  Pressure: %.2f\n", flowLpm, pulses, pressure);
@@ -290,8 +301,8 @@ void loop() {
     }
 
     // Determine pass/fail using thresholds (build flags)
-    float flowThreshold = (float)FLOW_RATE_THRESHOLD;
-    float pressureThreshold = (float)PRESSURE_THRESHOLD;
+    float flowThreshold = FLOW_RATE_THRESHOLD;
+    float pressureThreshold = PRESSURE_THRESHOLD;
     bool passed = (flowLpm > flowThreshold) && (!pressureAvailable || pressure > pressureThreshold);
 
     // Schedule LED state changes without blocking

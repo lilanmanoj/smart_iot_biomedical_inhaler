@@ -14,11 +14,11 @@
 #include <FirebaseClient.h>
 
 // --- Pin Configuration ---
-const int FLOW_PIN = 27;
-const int PRESSURE_PIN = 39;
-const int LED_BLUE = 33;
-const int LED_GREEN = 25;
-const int LED_RED = 32;
+const int flowPin = FLOW_PIN;
+const int pressurePin = PRESSURE_PIN;
+const int LEDBlue = LED_BLUE;
+const int LEDGreen = LED_GREEN;
+const int LEDRed = LED_RED;
 
 // --- System Configuration Constants ---
 const unsigned long SENSOR_INTERVAL_MS = 2000;
@@ -128,14 +128,14 @@ void connectToWiFi(const String& ssid, const String& pass) {
     // Blink blue LED rapidly while connecting
     if (millis() - lastBlueBlink >= 250) {
       lastBlueBlink = millis();
-      digitalWrite(LED_BLUE, !digitalRead(LED_BLUE));
+      digitalWrite(LEDBlue, !digitalRead(LEDBlue));
     }
     delay(10);
   }
 
   if (WiFi.status() == WL_CONNECTED) {
     currentState = RUNNING;
-    digitalWrite(LED_BLUE, HIGH); // Solid blue when connected
+    digitalWrite(LEDBlue, HIGH); // Solid blue when connected
     Serial.printf("Connected! IP: %s\n", WiFi.localIP().toString().c_str());
     initFirebase();
   } else {
@@ -185,7 +185,7 @@ void handleSensors() {
     bool pressureAvailable = false;
     
     if (PRESSURE_SENSOR_ENABLED == 1) {
-      int rawADC = analogRead(PRESSURE_PIN);
+      int rawADC = analogRead(pressurePin);
       // Replace with actual MPRLS calibration math later
       pressure = ((float)rawADC / 4095.0) * 25.0; 
       pressureAvailable = true;
@@ -205,12 +205,12 @@ void handleSensors() {
 
       // Update LED Timers cleanly
       if (passed) {
-        digitalWrite(LED_GREEN, HIGH);
-        digitalWrite(LED_RED, LOW);
+        digitalWrite(LEDGreen, HIGH);
+        digitalWrite(LEDRed, LOW);
         greenLedOffAt = millis() + LED_TIMEOUT_MS;
       } else {
-        digitalWrite(LED_RED, HIGH);
-        digitalWrite(LED_GREEN, LOW);
+        digitalWrite(LEDRed, HIGH);
+        digitalWrite(LEDGreen, LOW);
         redLedOffAt = millis() + LED_TIMEOUT_MS;
       }
 
@@ -225,15 +225,15 @@ void updateLEDs() {
   // AP Mode: Slow blink blue LED
   if (currentState == AP_MODE && (currentMillis - lastBlueBlink >= 1000)) {
     lastBlueBlink = currentMillis;
-    digitalWrite(LED_BLUE, !digitalRead(LED_BLUE));
+    digitalWrite(LEDBlue, !digitalRead(LEDBlue));
   }
 
   // Turn off Green/Red LEDs after timeout expires
-  if (digitalRead(LED_GREEN) == HIGH && currentMillis >= greenLedOffAt) {
-    digitalWrite(LED_GREEN, LOW);
+  if (digitalRead(LEDGreen) == HIGH && currentMillis >= greenLedOffAt) {
+    digitalWrite(LEDGreen, LOW);
   }
-  if (digitalRead(LED_RED) == HIGH && currentMillis >= redLedOffAt) {
-    digitalWrite(LED_RED, LOW);
+  if (digitalRead(LEDRed) == HIGH && currentMillis >= redLedOffAt) {
+    digitalWrite(LEDRed, LOW);
   }
 }
 
@@ -243,7 +243,7 @@ void handleNetwork() {
   } 
   else if (currentState == RUNNING && WiFi.status() != WL_CONNECTED) {
     Serial.println("Connection lost. Reconnecting...");
-    digitalWrite(LED_BLUE, LOW);
+    digitalWrite(LEDBlue, LOW);
     
     prefs.begin("wifi", true);
     String ssid = prefs.getString("ssid", "");
@@ -261,17 +261,17 @@ void setup() {
   Serial.println("\n--- Smart Inhaler Booting ---");
 
   // Init Pins
-  pinMode(LED_BLUE, OUTPUT);
-  pinMode(LED_GREEN, OUTPUT);
-  pinMode(LED_RED, OUTPUT);
-  pinMode(FLOW_PIN, INPUT_PULLUP);
+  pinMode(LEDBlue, OUTPUT);
+  pinMode(LEDGreen, OUTPUT);
+  pinMode(LEDRed, OUTPUT);
+  pinMode(flowPin, INPUT_PULLUP);
   
   if (PRESSURE_SENSOR_ENABLED == 1) {
     analogReadResolution(12);
   }
 
   // Attach Interrupt
-  attachInterrupt(digitalPinToInterrupt(FLOW_PIN), flow_isr, RISING);
+  attachInterrupt(digitalPinToInterrupt(flowPin), flow_isr, RISING);
 
   // Check Credentials
   prefs.begin("wifi", true);

@@ -75,6 +75,14 @@ PRESSURE_SENSOR_ENABLED=1
 export $(grep -v '^#' .env | xargs)
 ```
 
+5. If the device starts in AP mode, open the setup page at:
+
+```text
+http://192.168.4.1
+```
+
+Use this address to enter your Wi-Fi SSID and password.
+
 ## Build and Run
 
 Upload the firmware to the ESP32:

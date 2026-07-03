@@ -257,7 +257,7 @@ void handleNetwork() {
 // --- Standard Arduino Functions ---
 void setup() {
   Serial.begin(115200);
-  delay(500);
+  delay(2000);
   Serial.println("\n--- Smart Inhaler Booting ---");
 
   // Init Pins

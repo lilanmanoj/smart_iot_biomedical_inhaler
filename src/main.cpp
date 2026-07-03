@@ -101,11 +101,37 @@ void handleSave() {
 void startAPMode() {
   currentState = AP_MODE;
   WiFi.mode(WIFI_AP);
-  WiFi.softAP(WIFI_SETUP_SSID, WIFI_SETUP_PASSWORD);
+  delay(100);
+
+  // WPA2 requires a password of at least 8 characters; softAP() fails
+  // silently otherwise. Fall back to an open AP rather than a dead one.
+  const char* apSsid = WIFI_SETUP_SSID;
+  const char* apPass = WIFI_SETUP_PASSWORD;
+  if (strlen(apSsid) == 0) {
+    apSsid = "InhalerSetup";
+  }
+  if (strlen(apPass) > 0 && strlen(apPass) < 8) {
+    Serial.println("WARNING: AP password shorter than 8 chars - starting OPEN network.");
+    apPass = nullptr;
+  } else if (strlen(apPass) == 0) {
+    apPass = nullptr;
+  }
+
+  bool apStarted = WiFi.softAP(apSsid, apPass, 1 /*channel*/, 0 /*visible*/, 4 /*max clients*/);
+
+  // Many ESP32-C3 modules distort their RF output at full (20dBm) TX power,
+  // so clients see the AP but the association handshake times out.
+  WiFi.setTxPower(WIFI_POWER_8_5dBm);
+
   server.on("/", HTTP_GET, handleRoot);
   server.on("/save", HTTP_POST, handleSave);
   server.begin();
-  Serial.printf("Setup portal started on IP: %s\n", WiFi.softAPIP().toString().c_str());
+
+  if (apStarted) {
+    Serial.printf("Setup portal '%s' started on IP: %s\n", apSsid, WiFi.softAPIP().toString().c_str());
+  } else {
+    Serial.println("ERROR: softAP() failed to start!");
+  }
 }
 
 void initFirebase() {
@@ -122,6 +148,7 @@ void connectToWiFi(const String& ssid, const String& pass) {
   currentState = CONNECTING;
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid.c_str(), pass.c_str());
+  WiFi.setTxPower(WIFI_POWER_8_5dBm); // C3 antenna workaround (see startAPMode)
   Serial.printf("Attempting connection to %s...\n", ssid.c_str());
 
   unsigned long startAttempt = millis();
@@ -259,7 +286,16 @@ void handleNetwork() {
 // --- Standard Arduino Functions ---
 void setup() {
   Serial.begin(115200);
+#if ARDUINO_USB_CDC_ON_BOOT
+  // Native USB CDC: wait until the host opens the port (max 5s) so early
+  // boot messages are not lost.
+  unsigned long serialWaitStart = millis();
+  while (!Serial && millis() - serialWaitStart < 5000) {
+    delay(10);
+  }
+#else
   delay(2000);
+#endif
   Serial.println("\n--- Smart Inhaler Booting ---");
 
   // Init Pins

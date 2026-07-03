@@ -25,6 +25,7 @@ const unsigned long SENSOR_INTERVAL_MS = 2000;
 const unsigned long LED_TIMEOUT_MS = 5000;
 const unsigned long WIFI_TIMEOUT_MS = 10000;
 const float FLOW_PULSES_PER_LITER = 7.5; // Calibration constant (YF-S201C)
+const float PRESSURE_NOISE_DEADBAND = 0.5; // Ignore ADC noise below this (pressure units)
 
 // Macro Fallbacks
 #ifndef FLOW_RATE_THRESHOLD
@@ -192,9 +193,10 @@ void handleSensors() {
     }
 
     // --- IDLE CHECK ---
-    // Only evaluate and publish if sensors detect actual activity (> 0)
-    // Note: If ADC noise causes false triggers, change 0.0 to a small deadband (e.g., 0.5)
-    if (flowLpm > 150.0 || (pressureAvailable && pressure > 0.0)) {
+    // Only evaluate and publish if sensors detect actual activity.
+    // Flow: any measured flow means pulses were counted this interval.
+    // Pressure: use a small deadband so ADC noise doesn't cause false triggers.
+    if (flowLpm > 0.0 || (pressureAvailable && pressure > PRESSURE_NOISE_DEADBAND)) {
       bool passed = (flowLpm >= (float)FLOW_RATE_THRESHOLD);
       if (pressureAvailable) {
         passed = passed && (pressure >= (float)PRESSURE_THRESHOLD);
